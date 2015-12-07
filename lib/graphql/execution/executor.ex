@@ -1,4 +1,5 @@
 defmodule GraphQL.Execution.Executor do
+  require Logger
   @moduledoc ~S"""
   Execute a GraphQL query against a given schema / datastore.
 
@@ -13,7 +14,7 @@ defmodule GraphQL.Execution.Executor do
       # {:ok, %{hello: world}}
   """
   def execute(schema, document, root_value \\ %{}, variable_values \\ %{}, operation_name \\ nil) do
-    context = build_execution_context(schema, document, root_value, variable_values, operation_name)
+    context = build_execution_context(schema, document, root_value, variable_values, operation_name) |> IO.inspect
     {:ok, {data, _errors}} = execute_operation(context, context.operation, root_value)
     {:ok, data}
   end
@@ -52,6 +53,7 @@ defmodule GraphQL.Execution.Executor do
   end
 
   defp collect_fields(_context, _runtime_type, selection_set, fields \\ %{}, _visited_fragment_names \\ %{}) do
+    Logger.info "got selections: #{inspect selection_set[:selections]}"
     Enum.reduce selection_set[:selections], fields, fn(selection, fields) ->
       case selection do
         %{kind: :Field} -> Map.put(fields, field_entry_key(selection), [selection])
@@ -120,7 +122,19 @@ defmodule GraphQL.Execution.Executor do
     execute_fields(context, return_type, result, sub_field_asts)
   end
 
-  defp complete_value(_context, _return_type, _field_asts, _info, result) do
+  defp complete_value(context, %{ of: %GraphQL.ObjectType{} = return_type}, field_asts, _info, result) do
+    sub_field_asts = Enum.reduce field_asts, %{}, fn(field_ast, sub_field_asts) ->
+      if selection_set = Map.get(field_ast, :selectionSet) do
+        Logger.info "hier"
+        collect_fields(context, return_type, selection_set, sub_field_asts)
+      else
+        sub_field_asts
+      end
+    end
+    execute_fields(context, return_type, result, sub_field_asts)
+  end
+
+  defp complete_value(_context, return_type, _field_asts, _info, result) do
     result
   end
 
