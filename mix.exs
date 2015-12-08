@@ -32,6 +32,7 @@ defmodule GraphQL.Mixfile do
       # Doc dependencies
       {:earmark, "~> 0.1", only: :dev},
       {:ex_doc, "~> 0.8", only: :dev},
+      {:apex, "~> 0.3.4"},
       {:inch_ex, only: :dev}
     ]
   end

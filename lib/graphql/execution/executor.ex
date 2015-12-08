@@ -33,6 +33,12 @@ defmodule GraphQL.Execution.Executor do
   defp execute_operation(context, operation, root_value) do
     type = operation_root_type(context.schema, operation)
     fields = collect_fields(context, type, operation.selectionSet)
+    Logger.info "context"
+    Apex.ap context
+    Logger.info "type"
+    Apex.ap type
+    Logger.info "fields"
+    Apex.ap fields
     result = case operation.operation do
       :mutation -> execute_fields_serially(context, type, root_value, fields)
       _ -> execute_fields(context, type, root_value, fields)
@@ -53,7 +59,8 @@ defmodule GraphQL.Execution.Executor do
   end
 
   defp collect_fields(_context, _runtime_type, selection_set, fields \\ %{}, _visited_fragment_names \\ %{}) do
-    Logger.info "got selections: #{inspect selection_set[:selections]}"
+    Logger.info "called collect_fields"
+    Apex.ap {selection_set[:selections], fields}
     Enum.reduce selection_set[:selections], fields, fn(selection, fields) ->
       case selection do
         %{kind: :Field} -> Map.put(fields, field_entry_key(selection), [selection])
@@ -64,6 +71,8 @@ defmodule GraphQL.Execution.Executor do
 
   # source_value -> root_value?
   defp execute_fields(context, parent_type, source_value, fields) do
+    Logger.info "called execute_fields"
+    Apex.ap {parent_type, source_value, fields}
     Enum.reduce fields, %{}, fn({field_name, field_asts}, results) ->
       Map.put results, field_name, resolve_field(context, parent_type, source_value, field_asts)
     end
@@ -75,7 +84,9 @@ defmodule GraphQL.Execution.Executor do
   end
 
   defp resolve_field(context, parent_type, source, field_asts) do
+    Logger.info "called resolve_field with"
     field_ast = hd(field_asts)
+    Apex.ap {parent_type.name, source, field_ast.name}
     field_name = field_ast.name
     field_def = field_definition(context.schema, parent_type, field_name)
     return_type = field_def.type
@@ -99,10 +110,12 @@ defmodule GraphQL.Execution.Executor do
       resolve when is_function(resolve) -> resolve.(source, args, info)
       _ -> {:error, "Resolve function must be a {module, function} tuple (or a lambda)"}
     end
+    Logger.info "result: #{inspect result}"
     complete_value_catching_error(context, return_type, field_asts, info, result)
   end
 
   defp default_resolve_fn(source, _args, %{field_name: field_name}) do
+    Logger.info "using default_resolve_fn"
     source[field_name]
   end
 
@@ -122,16 +135,19 @@ defmodule GraphQL.Execution.Executor do
     execute_fields(context, return_type, result, sub_field_asts)
   end
 
-  defp complete_value(context, %{ of: %GraphQL.ObjectType{} = return_type}, field_asts, _info, result) do
+  defp complete_value(context, %{ of: %GraphQL.ObjectType{} = return_type}, field_asts, _info, results) do
+    Logger.info "called complete_value"
+    Apex.ap {return_type, field_asts, results}
     sub_field_asts = Enum.reduce field_asts, %{}, fn(field_ast, sub_field_asts) ->
       if selection_set = Map.get(field_ast, :selectionSet) do
-        Logger.info "hier"
         collect_fields(context, return_type, selection_set, sub_field_asts)
       else
         sub_field_asts
       end
     end
-    execute_fields(context, return_type, result, sub_field_asts)
+
+    results
+    |> Enum.map(fn result -> execute_fields(context, return_type, result, sub_field_asts) end)
   end
 
   defp complete_value(_context, return_type, _field_asts, _info, result) do

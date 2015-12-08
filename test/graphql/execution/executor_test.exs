@@ -134,17 +134,17 @@ defmodule GraphQL.Execution.Executor.ExecutorTest do
       query: %GraphQL.ObjectType{
         name: "ListsOfThings",
         fields: %{
-          numbers: %{
-            type: %{of: "Int"},
-            resolve: fn(_, _, _) -> [1, 2] end
-          },
+          #numbers: %{
+            #type: %{of: "Int"},
+            #resolve: fn(_, _, _) -> [1, 2] end
+          #},
           books: %{
             type: %{
               of: %GraphQL.ObjectType{
                 name: "Book",
                 fields: %{
-                  title: %{ type: "String" },
-                  isbn: %{ type: "String" }
+                  title: %{ name: "title", type: "String", resolve: fn(p, _, _) -> p.title   end},
+                  isbn: %{ name: "isbn", type: "String", resolve: fn(p, _, _) -> p.isbn   end}
                 }
               }
             },
@@ -156,12 +156,12 @@ defmodule GraphQL.Execution.Executor.ExecutorTest do
       }
     }
 
-    assert_execute {"{numbers books {title}}", schema},
+    assert_execute {"{books {title}}", schema},
       %{
-        "numbers" => [1, 2],
+        #"numbers" => [1, 2],
         "books" => [
-          %{title: "A"},
-          %{title: "B"}
+          %{"title" => "A"},
+          %{"title" => "B"}
         ]
       }
   end
